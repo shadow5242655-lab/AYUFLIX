@@ -47,6 +47,23 @@ export default function MovieDetailPage() {
     });
   }, [id]);
 
+  const handlePlay = () => {
+    // Save to continue watching
+    const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
+    const item = {
+      id: movie.id,
+      title: movie.title,
+      posterPath: movie.poster_path,
+      backdropPath: movie.backdrop_path,
+      mediaType: 'movie',
+      lastWatched: new Date().toISOString(),
+    };
+    const filtered = continueWatching.filter((i) => i.id !== movie.id);
+    const updated = [item, ...filtered].slice(0, 20);
+    localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+    setPlaying(true);
+  };
+
   const toggleMyList = () => {
     const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
     if (inMyList) {
@@ -129,7 +146,7 @@ export default function MovieDetailPage() {
             {/* Netflix-style action buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => setPlaying(!playing)}
+                onClick={handlePlay}
                 className="flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded hover:bg-gray-200 transition-all text-lg"
               >
                 {playing ? (
@@ -161,7 +178,7 @@ export default function MovieDetailPage() {
         {/* Video Player */}
         {playing && (
           <div className="mt-8">
-            <VideoPlayer movieId={movie.id} />
+            <VideoPlayer mediaId={movie.id} type="movie" />
           </div>
         )}
 

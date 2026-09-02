@@ -50,6 +50,25 @@ export default function TvDetailPage() {
     });
   }, [id]);
 
+  const handlePlay = () => {
+    // Save to continue watching
+    const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
+    const item = {
+      id: tvData.id,
+      title: tvData.name,
+      posterPath: tvData.poster_path,
+      backdropPath: tvData.backdrop_path,
+      mediaType: 'tv',
+      season: season,
+      episode: episode,
+      lastWatched: new Date().toISOString(),
+    };
+    const filtered = continueWatching.filter((i) => i.id !== tvData.id);
+    const updated = [item, ...filtered].slice(0, 20);
+    localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+    setPlaying(true);
+  };
+
   const toggleMyList = () => {
     const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
     if (inMyList) {
@@ -125,7 +144,7 @@ export default function TvDetailPage() {
             {/* Netflix-style action buttons */}
             <div className="flex gap-3 mb-6">
               <button
-                onClick={() => setPlaying(!playing)}
+                onClick={handlePlay}
                 className="flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded hover:bg-gray-200 transition-all text-lg"
               >
                 {playing ? (
@@ -163,7 +182,7 @@ export default function TvDetailPage() {
         {/* Video Player */}
         {playing && (
           <div className="mt-4">
-            <VideoPlayer tvId={tvData.id} season={season} episode={episode} />
+            <VideoPlayer mediaId={tvData.id} type="tv" season={season} episode={episode} />
           </div>
         )}
 

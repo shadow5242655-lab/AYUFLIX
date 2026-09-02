@@ -6,6 +6,7 @@ import ContinueWatchingRow from '@/components/ContinueWatchingRow';
 import { getTrending, getTopRated, getMoviesByGenre, getNowPlaying } from '@/lib/tmdb';
 import { useCallback } from 'react';
 
+
 export default function Home() {
   const trending = useCallback(() => getTrending(), []);
   const topRated = useCallback(() => getTopRated(), []);

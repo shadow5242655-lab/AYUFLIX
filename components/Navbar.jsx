@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FaSearch, FaBell, FaUser, FaHome, FaHistory } from 'react-icons/fa';
+import { FaSearch, FaBell, FaUser, FaHome, FaHistory, FaDice } from 'react-icons/fa';
+import { useRandomMovie } from '@/lib/randomMovie';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -12,6 +13,7 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const router = useRouter();
+  const fetchRandomMovie = useRandomMovie();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -64,10 +66,23 @@ export default function Navbar() {
           <Link href="/my-list" className="text-white hover:text-red-500 hover:underline decoration-red-600 transition-colors text-sm font-medium">
             My List
           </Link>
+          <button
+            onClick={fetchRandomMovie}
+            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-all hover:scale-105"
+          >
+            🎲 Surprise Me
+          </button>
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Mobile Surprise Me */}
+          <button
+            onClick={fetchRandomMovie}
+            className="md:hidden bg-red-600 hover:bg-red-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+          >
+            🎲
+          </button>
           {searchOpen ? (
             <form onSubmit={handleSearch} className="flex items-center">
               <input

@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { imageUrl } from '@/lib/tmdb';
-import { getTrending } from '@/lib/tmdb';
+import { imageUrl, getTrending, getMoviesByIds } from '@/lib/tmdb';
 
 export default function HeroCarousel() {
   const [movies, setMovies] = useState([]);
@@ -11,6 +10,28 @@ export default function HeroCarousel() {
   const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    // Check for admin hero movies first
+    try {
+      const savedHero = localStorage.getItem('ayuflix_admin_hero_movies');
+      if (savedHero) {
+        const ids = JSON.parse(savedHero);
+        if (ids.length > 0) {
+          getMoviesByIds(ids).then((data) => {
+            if (data.length > 0) {
+              setMovies(data.slice(0, 5));
+            } else {
+              // Fallback to trending
+              getTrending().then((trending) => setMovies(trending.slice(0, 5)));
+            }
+          });
+          return;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    // Default: use trending
     getTrending().then((data) => setMovies(data.slice(0, 5)));
   }, []);
 

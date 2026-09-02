@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { getMovieDetails, getMovieCredits, getSimilarMovies, imageUrl } from '@/lib/tmdb';
+import { getMovieDetails, getMovieCredits, getSimilarMovies, imageUrl, fetchTrailer } from '@/lib/tmdb';
 import VideoPlayer from '@/components/VideoPlayer';
+import TrailerModal from '@/components/TrailerModal';
 import MovieCard from '@/components/MovieCard';
-import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck } from 'react-icons/fa';
+import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm } from 'react-icons/fa';
 import Link from 'next/link';
 
 export default function MovieDetailPage() {
@@ -15,6 +16,8 @@ export default function MovieDetailPage() {
   const [similar, setSimilar] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [inMyList, setInMyList] = useState(false);
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -62,6 +65,17 @@ export default function MovieDetailPage() {
     const updated = [item, ...filtered].slice(0, 20);
     localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
     setPlaying(true);
+  };
+
+  const handleWatchTrailer = async () => {
+    if (!id) return;
+    const key = await fetchTrailer(id, 'movie');
+    if (key) {
+      setTrailerKey(key);
+      setShowTrailer(true);
+    } else {
+      alert('🚫 No trailer available for this title.');
+    }
   };
 
   const toggleMyList = () => {
@@ -144,7 +158,7 @@ export default function MovieDetailPage() {
             )}
 
             {/* Netflix-style action buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={handlePlay}
                 className="flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded hover:bg-gray-200 transition-all text-lg"
@@ -171,6 +185,13 @@ export default function MovieDetailPage() {
                 {inMyList ? <FaCheck size={18} /> : <FaPlus size={18} />}
                 {inMyList ? 'In My List' : 'My List'}
               </button>
+
+              <button
+                onClick={handleWatchTrailer}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded transition-all"
+              >
+                <FaFilm size={18} /> Watch Trailer
+              </button>
             </div>
           </div>
         </div>
@@ -180,6 +201,17 @@ export default function MovieDetailPage() {
           <div className="mt-8">
             <VideoPlayer mediaId={movie.id} type="movie" />
           </div>
+        )}
+
+        {/* Trailer Modal */}
+        {showTrailer && trailerKey && (
+          <TrailerModal
+            trailerKey={trailerKey}
+            onClose={() => {
+              setShowTrailer(false);
+              setTrailerKey(null);
+            }}
+          />
         )}
 
         {/* Similar Movies */}

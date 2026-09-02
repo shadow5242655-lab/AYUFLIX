@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { getTvDetails, getTvCredits, getSimilarTv, imageUrl } from '@/lib/tmdb';
+import { getTvDetails, getTvCredits, getSimilarTv, imageUrl, fetchTrailer } from '@/lib/tmdb';
 import VideoPlayer from '@/components/VideoPlayer';
+import TrailerModal from '@/components/TrailerModal';
 import SeasonSelector from '@/components/SeasonSelector';
+import EpisodeList from '@/components/EpisodeList';
 import MovieCard from '@/components/MovieCard';
-import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck } from 'react-icons/fa';
+import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm } from 'react-icons/fa';
 import Link from 'next/link';
+import { markEpisodeWatched, getNextUnwatchedEpisode, getSeasonWatchedCount } from '@/lib/episodeTracker';
 
 export default function TvDetailPage() {
   const { id } = useParams();
@@ -18,6 +21,9 @@ export default function TvDetailPage() {
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
   const [inMyList, setInMyList] = useState(false);
+  const [seasonProgress, setSeasonProgress] = useState({ watched: 0, total: 0 });
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -50,6 +56,15 @@ export default function TvDetailPage() {
     });
   }, [id]);
 
+  // Update season progress when season/episode changes
+  useEffect(() => {
+    if (!tvData || !id) return;
+    const currentSeasonData = tvData.seasons?.find((s) => s.season_number === season);
+    const epCount = currentSeasonData?.episode_count || 0;
+    const watched = getSeasonWatchedCount(id, season, epCount);
+    setSeasonProgress({ watched, total: epCount });
+  }, [id, season, tvData]);
+
   const handlePlay = () => {
     // Save to continue watching
     const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
@@ -66,7 +81,60 @@ export default function TvDetailPage() {
     const filtered = continueWatching.filter((i) => i.id !== tvData.id);
     const updated = [item, ...filtered].slice(0, 20);
     localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+
+    // Mark current episode as watched
+    markEpisodeWatched(tvData.id, season, episode);
     setPlaying(true);
+
+    // Refresh progress
+    const currentSeasonData = tvData.seasons?.find((s) => s.season_number === season);
+    const epCount = currentSeasonData?.episode_count || 0;
+    const watched = getSeasonWatchedCount(tvData.id, season, epCount);
+    setSeasonProgress({ watched, total: epCount });
+  };
+
+  const handleNextEpisode = useCallback(() => {
+    if (!tvData) return;
+    const totalSeasons = tvData.number_of_seasons || 1;
+    const episodesPerSeason = {};
+    tvData.seasons?.forEach((s) => {
+      if (s.season_number > 0) {
+        episodesPerSeason[s.season_number] = s.episode_count || 0;
+      }
+    });
+
+    const next = getNextUnwatchedEpisode(tvData.id, season, episode, totalSeasons, episodesPerSeason);
+    if (next) {
+      setSeason(next.season);
+      setEpisode(next.episode);
+
+      // Update continue watching
+      const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
+      const item = {
+        id: tvData.id,
+        title: tvData.name,
+        posterPath: tvData.poster_path,
+        backdropPath: tvData.backdrop_path,
+        mediaType: 'tv',
+        season: next.season,
+        episode: next.episode,
+        lastWatched: new Date().toISOString(),
+      };
+      const filtered = continueWatching.filter((i) => i.id !== tvData.id);
+      const updated = [item, ...filtered].slice(0, 20);
+      localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+    }
+  }, [tvData, season, episode]);
+
+  const handleWatchTrailer = async () => {
+    if (!id) return;
+    const key = await fetchTrailer(id, 'tv');
+    if (key) {
+      setTrailerKey(key);
+      setShowTrailer(true);
+    } else {
+      alert('🚫 No trailer available for this title.');
+    }
   };
 
   const toggleMyList = () => {
@@ -97,6 +165,16 @@ export default function TvDetailPage() {
   }
 
   const cast = credits?.cast?.slice(0, 6) || [];
+  const hasNextEpisode = getNextUnwatchedEpisode(
+    tvData.id,
+    season,
+    episode,
+    tvData.number_of_seasons || 1,
+    (tvData.seasons || []).reduce((acc, s) => {
+      if (s.season_number > 0) acc[s.season_number] = s.episode_count || 0;
+      return acc;
+    }, {})
+  ) !== null;
 
   return (
     <div className="min-h-screen bg-black">
@@ -141,8 +219,28 @@ export default function TvDetailPage() {
               </div>
             )}
 
+            {/* Season Progress */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-white font-semibold">Season {season} Progress</h3>
+                <span className="text-sm text-gray-400">
+                  {seasonProgress.watched}/{seasonProgress.total} episodes watched
+                </span>
+              </div>
+              <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-red-600 rounded-full transition-all duration-500"
+                  style={{
+                    width: seasonProgress.total > 0
+                      ? `${(seasonProgress.watched / seasonProgress.total) * 100}%`
+                      : '0%',
+                  }}
+                />
+              </div>
+            </div>
+
             {/* Netflix-style action buttons */}
-            <div className="flex gap-3 mb-6">
+            <div className="flex flex-wrap gap-3 mb-6">
               <button
                 onClick={handlePlay}
                 className="flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded hover:bg-gray-200 transition-all text-lg"
@@ -169,6 +267,13 @@ export default function TvDetailPage() {
                 {inMyList ? <FaCheck size={18} /> : <FaPlus size={18} />}
                 {inMyList ? 'In My List' : 'My List'}
               </button>
+
+              <button
+                onClick={handleWatchTrailer}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded transition-all"
+              >
+                <FaFilm size={18} /> Watch Trailer
+              </button>
             </div>
 
             <SeasonSelector
@@ -179,10 +284,46 @@ export default function TvDetailPage() {
           </div>
         </div>
 
+        {/* Trailer Modal */}
+        {showTrailer && trailerKey && (
+          <TrailerModal
+            trailerKey={trailerKey}
+            onClose={() => {
+              setShowTrailer(false);
+              setTrailerKey(null);
+            }}
+          />
+        )}
+
+        {/* Episode List */}
+        <div className="mt-6">
+          <EpisodeList
+            tvId={tvData.id}
+            tvData={tvData}
+            selectedSeason={season}
+            currentEpisode={episode}
+            onEpisodeSelect={(ep) => {
+              setEpisode(ep);
+              // Update progress
+              const currentSeasonData = tvData.seasons?.find((s) => s.season_number === season);
+              const epCount = currentSeasonData?.episode_count || 0;
+              const watched = getSeasonWatchedCount(tvData.id, season, epCount);
+              setSeasonProgress({ watched, total: epCount });
+            }}
+          />
+        </div>
+
         {/* Video Player */}
         {playing && (
           <div className="mt-4">
-            <VideoPlayer mediaId={tvData.id} type="tv" season={season} episode={episode} />
+            <VideoPlayer
+              mediaId={tvData.id}
+              type="tv"
+              season={season}
+              episode={episode}
+              hasNextEpisode={hasNextEpisode}
+              onNextEpisode={handleNextEpisode}
+            />
           </div>
         )}
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { FaChevronLeft, FaChevronRight, FaPlay } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaPlay, FaTrash } from 'react-icons/fa';
 import { imageUrl } from '@/lib/tmdb';
 
 export default function ContinueWatchingRow() {
@@ -45,7 +45,19 @@ export default function ContinueWatchingRow() {
 
   return (
     <div className="relative group/row px-4 md:px-8 mb-8">
-      <h2 className="text-white text-lg md:text-xl font-bold mb-3">Continue Watching</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-white text-lg md:text-xl font-bold">Continue Watching</h2>
+        <button
+          onClick={() => {
+            setItems([]);
+            localStorage.removeItem('ayuflix-continue');
+          }}
+          className="flex items-center gap-1 text-gray-400 hover:text-red-500 text-xs transition-colors"
+        >
+          <FaTrash size={12} />
+          Remove All
+        </button>
+      </div>
 
       <div className="relative">
         {/* Left Arrow */}

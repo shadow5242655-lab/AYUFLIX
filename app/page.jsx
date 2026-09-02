@@ -2,7 +2,6 @@
 
 import HeroCarousel from '@/components/HeroCarousel';
 import MovieRow from '@/components/MovieRow';
-import HistoryRow from '@/components/HistoryRow';
 import ContinueWatchingRow from '@/components/ContinueWatchingRow';
 import { getTrending, getTopRated, getMoviesByGenre, getNowPlaying } from '@/lib/tmdb';
 import { useCallback } from 'react';
@@ -25,7 +24,6 @@ export default function Home() {
         <MovieRow title="Trending Now" fetchFn={trending} />
         <MovieRow title="Top Rated" fetchFn={topRated} />
         <ContinueWatchingRow />
-        <HistoryRow />
         <MovieRow title="Now Playing" fetchFn={nowPlaying} />
         <MovieRow title="Action" fetchFn={action} />
         <MovieRow title="Comedy" fetchFn={comedy} />

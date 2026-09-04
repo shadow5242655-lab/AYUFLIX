@@ -8,7 +8,8 @@ const HARDCODED_SERVERS = [
   id: 'nxsha',
   name: 'Nxsha',
   getUrl: (id, type, season, episode) => {
-    return `https://web.nxsha.app/embed/${id}`;
+    if (type === 'tv') return `https://web.nxsha.app/embed/tv/${id}/${season}/${episode}`;
+    return `https://web.nxsha.app/embed/movie/${id}`;
   }
 },
   {

@@ -1,7 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { FaForward, FaSpinner } from 'react-icons/fa';
-import { fetchImdbId } from '@/lib/tmdb';
 
 // Only working servers
 const HARDCODED_SERVERS = [
@@ -19,6 +18,14 @@ const HARDCODED_SERVERS = [
     getUrl: (id, type, season, episode) => {
       if (type === 'tv') return `https://v1.vidsrc.wiki/embed/tv/${id}/${season}/${episode}/`;
       return `https://v1.vidsrc.wiki/embed/movie/${id}/`;
+    }
+  },
+  {
+    id: 'vidsrc_sbs',
+    name: 'VidSrc SBS',
+    getUrl: (id, type, season, episode) => {
+      if (type === 'tv') return `https://vidsrc.sbs/embed/tv/${id}/${season}/${episode}/`;
+      return `https://vidsrc.sbs/embed/movie/${id}/`;
     }
   },
   {
@@ -93,7 +100,6 @@ export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episo
       const filteredServers = getFilteredServers();
       setServers(filteredServers);
       
-      // If current active server is disabled, switch to first enabled server
       const currentServerExists = filteredServers.some((s) => s.id === activeServerId);
       if (!currentServerExists && filteredServers.length > 0) {
         setActiveServerId(filteredServers[0].id);
@@ -101,8 +107,6 @@ export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episo
     };
 
     updateServers();
-
-    // Listen for storage changes (when admin panel updates server status)
     window.addEventListener('storage', updateServers);
     
     return () => window.removeEventListener('storage', updateServers);
@@ -188,4 +192,4 @@ export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episo
       </div>
     </div>
   );
-}
+    }

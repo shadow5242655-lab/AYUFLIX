@@ -28,14 +28,6 @@ const HARDCODED_SERVERS = [
       return `https://www.2embed.cc/embed/${id}`;
     }
   },
-  {
-    id: 'multiembed',
-    name: 'MultiEmbed',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`;
-      return `https://multiembed.mov/?video_id=${id}&tmdb=1`;
-    }
-  },
 ];
 
 // Convert custom server storage format to player format

@@ -56,39 +56,57 @@ function buildCustomServers(customServers) {
   }));
 }
 
+// Function to get filtered servers based on admin settings
+function getFilteredServers() {
+  try {
+    const savedCustom = localStorage.getItem('ayuflix_custom_servers');
+    const customServers = savedCustom ? buildCustomServers(JSON.parse(savedCustom)) : [];
+
+    const mergedMap = new Map();
+    HARDCODED_SERVERS.forEach((s) => mergedMap.set(s.id, s));
+    customServers.forEach((s) => mergedMap.set(s.id, s));
+    const allServers = Array.from(mergedMap.values());
+
+    const savedStatus = localStorage.getItem('ayuflix_admin_server_status');
+    if (savedStatus) {
+      const status = JSON.parse(savedStatus);
+      const enabledServers = allServers.filter((s) => status[s.id]?.enabled !== false);
+      if (enabledServers.length > 0) {
+        return enabledServers;
+      }
+    }
+    return allServers;
+  } catch {
+    return HARDCODED_SERVERS;
+  }
+}
+
 export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episode = 1, onNextEpisode, hasNextEpisode }) {
   const [activeServerId, setActiveServerId] = useState(HARDCODED_SERVERS[0].id);
   const [servers, setServers] = useState(HARDCODED_SERVERS);
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Load custom servers + admin toggles
+  // Load servers on mount and listen for storage changes
   useEffect(() => {
-    try {
-      const savedCustom = localStorage.getItem('ayuflix_custom_servers');
-      const customServers = savedCustom ? buildCustomServers(JSON.parse(savedCustom)) : [];
-
-      const mergedMap = new Map();
-      HARDCODED_SERVERS.forEach((s) => mergedMap.set(s.id, s));
-      customServers.forEach((s) => mergedMap.set(s.id, s));
-      const allServers = Array.from(mergedMap.values());
-
-      const savedStatus = localStorage.getItem('ayuflix_admin_server_status');
-      if (savedStatus) {
-        const status = JSON.parse(savedStatus);
-        const enabledServers = allServers.filter((s) => status[s.id]?.enabled !== false);
-        if (enabledServers.length > 0) {
-          setServers(enabledServers);
-        } else {
-          setServers(allServers);
-        }
-      } else {
-        setServers(allServers);
+    const updateServers = () => {
+      const filteredServers = getFilteredServers();
+      setServers(filteredServers);
+      
+      // If current active server is disabled, switch to first enabled server
+      const currentServerExists = filteredServers.some((s) => s.id === activeServerId);
+      if (!currentServerExists && filteredServers.length > 0) {
+        setActiveServerId(filteredServers[0].id);
       }
-    } catch {
-      // Use hardcoded servers if parsing fails
-    }
-  }, []);
+    };
+
+    updateServers();
+
+    // Listen for storage changes (when admin panel updates server status)
+    window.addEventListener('storage', updateServers);
+    
+    return () => window.removeEventListener('storage', updateServers);
+  }, [activeServerId]);
 
   // Generate video URL when server or media changes
   useEffect(() => {

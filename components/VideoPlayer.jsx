@@ -21,14 +21,6 @@ const HARDCODED_SERVERS = [
     }
   },
   {
-    id: 'vidsrc_sbs',
-    name: 'VidSrc SBS',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://vidsrc.sbs/embed/tv/${id}/${season}/${episode}/`;
-      return `https://vidsrc.sbs/embed/movie/${id}/`;
-    }
-  },
-  {
     id: '2embed',
     name: '2Embed',
     getUrl: (id, type, season, episode) => {

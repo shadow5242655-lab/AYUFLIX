@@ -313,18 +313,17 @@ export default function TvDetailPage() {
           />
         </div>
 
-        {/* Video Player */}
-        {playing && (
-          <div className="mt-4">
-            <VideoPlayer
-              mediaId={tvData.id}
-              type="tv"
-              season={season}
-              episode={episode}
-              hasNextEpisode={hasNextEpisode}
-              onNextEpisode={handleNextEpisode}
-            />
-          </div>
+        {/* Video Player - Always visible */}
+<div className="mt-4">
+  <VideoPlayer
+    mediaId={tvData.id}
+    type="tv"
+    season={season}
+    episode={episode}
+    hasNextEpisode={hasNextEpisode}
+    onNextEpisode={handleNextEpisode}
+  />
+</div>
         )}
 
         {/* Similar Shows */}

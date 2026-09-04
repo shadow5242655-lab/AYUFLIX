@@ -6,6 +6,14 @@ import { fetchImdbId } from '@/lib/tmdb';
 // Only working servers
 const HARDCODED_SERVERS = [
   {
+    id: 'vidlink',
+    name: 'VidLink',
+    getUrl: (id, type, season, episode) => {
+      if (type === 'tv') return `https://vidlink.pro/tv/${id}/${season}/${episode}`;
+      return `https://vidlink.pro/movie/${id}`;
+    }
+  },
+  {
     id: 'vidsrc_wiki',
     name: 'VidSrc',
     getUrl: (id, type, season, episode) => {
@@ -13,14 +21,8 @@ const HARDCODED_SERVERS = [
       return `https://v1.vidsrc.wiki/embed/movie/${id}/`;
     }
   },
-  {
-    id: 'vidsrc_sbs',
-    name: 'VidSrc SBS',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://vidsrc.sbs/embed/tv/${id}/${season}/${episode}/`;
-      return `https://vidsrc.sbs/embed/movie/${id}/`;
-    }
-  },
+  // ... rest of your servers
+];
   {
     id: '2embed',
     name: '2Embed',

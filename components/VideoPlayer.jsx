@@ -13,6 +13,14 @@ const HARDCODED_SERVERS = [
     }
   },
   {
+  id: 'vidking',
+  name: 'VidKing',
+  getUrl: (id, type, season, episode) => {
+    if (type === 'tv') return `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`;
+    return `https://www.vidking.net/embed/movie/${id}`;
+  }
+},
+  {
     id: 'vidsrc_wiki',
     name: 'VidSrc',
     getUrl: (id, type, season, episode) => {

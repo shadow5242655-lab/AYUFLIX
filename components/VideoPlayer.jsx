@@ -5,6 +5,13 @@ import { FaForward, FaSpinner } from 'react-icons/fa';
 // Only working servers
 const HARDCODED_SERVERS = [
   {
+  id: 'nxsha',
+  name: 'Nxsha',
+  getUrl: (id, type, season, episode) => {
+    return `https://web.nxsha.app/embed/${id}`;
+  }
+},
+  {
     id: 'vidlink',
     name: 'VidLink',
     getUrl: (id, type, season, episode) => {

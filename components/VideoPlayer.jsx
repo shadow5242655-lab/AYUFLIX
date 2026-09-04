@@ -21,8 +21,6 @@ const HARDCODED_SERVERS = [
       return `https://v1.vidsrc.wiki/embed/movie/${id}/`;
     }
   },
-  // ... rest of your servers
-];
   {
     id: '2embed',
     name: '2Embed',

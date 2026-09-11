@@ -1,0 +1,17 @@
+{
+  "name": "AYUFLIX — Watch Movies & TV Shows",
+  "short_name": "AYUFLIX",
+  "description": "Stream thousands of movies and TV shows free, in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#E50914",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

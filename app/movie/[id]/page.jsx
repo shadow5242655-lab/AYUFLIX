@@ -1,19 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { getMovieDetails, getMovieCredits, getSimilarMovies, imageUrl, fetchTrailer } from '@/lib/tmdb';
+import { getMovieDetails, getMovieCredits, getSimilarMovies, getMovieRecommendations, imageUrl, fetchTrailer } from '@/lib/tmdb';
+import { toggleMyListItem, isInMyList } from '@/lib/myList';
+import { toast } from '@/lib/toast';
 import VideoPlayer from '@/components/VideoPlayer';
 import TrailerModal from '@/components/TrailerModal';
 import MovieCard from '@/components/MovieCard';
-import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm } from 'react-icons/fa';
+import StarRating from '@/components/StarRating';
+import CastList from '@/components/CastList';
+import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm, FaShareAlt } from 'react-icons/fa';
 import Link from 'next/link';
 
 export default function MovieDetailPage() {
   const { id } = useParams();
   const [movie, setMovie] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const [credits, setCredits] = useState(null);
   const [similar, setSimilar] = useState([]);
+  const [recommended, setRecommended] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [inMyList, setInMyList] = useState(false);
   const [trailerKey, setTrailerKey] = useState(null);
@@ -21,18 +27,27 @@ export default function MovieDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    setNotFound(false);
+    setMovie(null);
     Promise.all([
       getMovieDetails(id),
       getMovieCredits(id),
       getSimilarMovies(id),
-    ]).then(([movieData, creditsData, similarData]) => {
+      getMovieRecommendations(id),
+    ])
+    .then(([movieData, creditsData, similarData, recData]) => {
+      if (!movieData?.id) {
+        setNotFound(true);
+        return;
+      }
       setMovie(movieData);
       setCredits(creditsData);
       setSimilar(similarData);
+      setRecommended(recData || []);
+      document.title = `${movieData.title} (${movieData.release_date?.slice(0, 4) || ''}) — AYUFLIX`;
 
       // Check if in My List
-      const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
-      setInMyList(myList.some((item) => item.id === movieData.id));
+      setInMyList(isInMyList(movieData.id));
 
       // Save to history
       const historyItem = {
@@ -47,10 +62,16 @@ export default function MovieDetailPage() {
       const filteredHistory = existingHistory.filter((item) => item.id !== movieData.id);
       const updatedHistory = [historyItem, ...filteredHistory].slice(0, 50);
       localStorage.setItem('ayuflix-history', JSON.stringify(updatedHistory));
-    });
+    })
+    .catch(() => setNotFound(true));
   }, [id]);
 
   const handlePlay = () => {
+    if (playing) {
+      setPlaying(false);
+      toast('Player paused — scroll down to resume', 'info');
+      return;
+    }
     // Save to continue watching
     const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
     const item = {
@@ -65,6 +86,10 @@ export default function MovieDetailPage() {
     const updated = [item, ...filtered].slice(0, 20);
     localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
     setPlaying(true);
+    // Scroll player into view
+    setTimeout(() => {
+      document.getElementById('ayuflix-player')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
   };
 
   const handleWatchTrailer = async () => {
@@ -74,28 +99,50 @@ export default function MovieDetailPage() {
       setTrailerKey(key);
       setShowTrailer(true);
     } else {
-      alert('🚫 No trailer available for this title.');
+      toast('🚫 No trailer available for this title.', 'error');
     }
   };
 
-  const toggleMyList = () => {
-    const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
-    if (inMyList) {
-      const updated = myList.filter((item) => item.id !== movie.id);
-      localStorage.setItem('ayuflix-mylist', JSON.stringify(updated));
-      setInMyList(false);
-    } else {
-      const newItem = {
-        id: movie.id,
-        title: movie.title,
-        posterPath: movie.poster_path,
-        mediaType: 'movie',
-        addedAt: new Date().toISOString(),
-      };
-      localStorage.setItem('ayuflix-mylist', JSON.stringify([newItem, ...myList]));
-      setInMyList(true);
+  const toggleList = () => {
+    const nowIn = toggleMyListItem({
+      id: movie.id,
+      title: movie.title,
+      posterPath: movie.poster_path,
+      mediaType: 'movie',
+    });
+    setInMyList(nowIn);
+    toast(nowIn ? '✅ Added to My List' : 'Removed from My List', 'success');
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `${movie.title} — AYUFLIX`,
+      text: `Watch ${movie.title} on AYUFLIX!`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast('🔗 Link copied to clipboard!', 'success');
+      }
+    } catch {
+      // User cancelled share
     }
   };
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-red-500 text-xl font-bold">Movie not found 😕</p>
+        <p className="text-gray-500 text-sm">It may have been removed or the link is wrong.</p>
+        <Link href="/" className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors">
+          Back to home
+        </Link>
+      </div>
+    );
+  }
 
   if (!movie) {
     return (
@@ -106,7 +153,7 @@ export default function MovieDetailPage() {
   }
 
   const director = credits?.crew?.find((c) => c.job === 'Director');
-  const cast = credits?.cast?.slice(0, 6) || [];
+  // cast rendering handled by CastList component
 
   return (
     <div className="min-h-screen bg-black">
@@ -150,12 +197,13 @@ export default function MovieDetailPage() {
             )}
 
             {/* Cast */}
-            {cast.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-white font-semibold mb-2">Cast</h3>
-                <p className="text-gray-400 text-sm">{cast.map((c) => c.name).join(', ')}</p>
-              </div>
-            )}
+            {/* Cast — clickable, links to person pages */}
+            <CastList cast={credits?.cast || []} limit={8} />
+
+            {/* User Rating */}
+            <div className="mb-6">
+              <StarRating mediaId={movie.id} title={movie.title} />
+            </div>
 
             {/* Netflix-style action buttons */}
             <div className="flex flex-wrap gap-3">
@@ -173,12 +221,12 @@ export default function MovieDetailPage() {
                   </>
                 )}
               </button>
-              
+
               <button
-                onClick={toggleMyList}
+                onClick={toggleList}
                 className={`flex items-center gap-2 px-6 py-3 rounded font-medium transition-all ${
-                  inMyList 
-                    ? 'bg-white/20 text-white border border-white/40' 
+                  inMyList
+                    ? 'bg-white/20 text-white border border-white/40'
                     : 'bg-gray-700/80 text-white border border-gray-600 hover:bg-gray-600'
                 }`}
               >
@@ -192,16 +240,21 @@ export default function MovieDetailPage() {
               >
                 <FaFilm size={18} /> Watch Trailer
               </button>
+
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2 bg-gray-700/80 hover:bg-gray-600 text-white border border-gray-600 px-6 py-3 rounded font-medium transition-all"
+              >
+                <FaShareAlt size={16} /> Share
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Video Player */}
-        {playing && (
-          <div className="mt-8">
-            <VideoPlayer mediaId={movie.id} type="movie" />
-          </div>
-        )}
+        {/* Video Player - Always visible */}
+        <div id="ayuflix-player" className="mt-8">
+          <VideoPlayer mediaId={movie.id} type="movie" />
+        </div>
 
         {/* Trailer Modal */}
         {showTrailer && trailerKey && (
@@ -214,13 +267,25 @@ export default function MovieDetailPage() {
           />
         )}
 
+        {/* Recommended for you (TMDB recommendations) */}
+        {recommended.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-xl font-bold text-white mb-4">Recommended For You</h2>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-4">
+              {recommended.slice(0, 20).map((m) => (
+                <MovieCard key={m.id} movie={{ ...m, media_type: 'movie' }} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Similar Movies */}
         {similar.length > 0 && (
-          <div className="mt-12 mb-16">
+          <div className="mt-8 mb-16">
             <h2 className="text-xl font-bold text-white mb-4">More Like This</h2>
             <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-4">
               {similar.map((m) => (
-                <MovieCard key={m.id} movie={m} />
+                <MovieCard key={m.id} movie={{ ...m, media_type: 'movie' }} />
               ))}
             </div>
           </div>

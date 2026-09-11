@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FaSearch, FaBell, FaUser, FaHome, FaHistory, FaDice } from 'react-icons/fa';
+import { FaSearch, FaUser, FaHome, FaHistory, FaListUl } from 'react-icons/fa';
 import { useRandomMovie } from '@/lib/randomMovie';
+import MobileMenu from './MobileMenu';
+import SearchSuggestions from './SearchSuggestions';
+import NotificationsMenu from './NotificationsMenu';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const router = useRouter();
@@ -31,14 +33,18 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (query.trim()) {
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
-      setSearchOpen(false);
-      setQuery('');
-    }
-  };
+  // Press "/" anywhere to open search
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <nav
@@ -83,29 +89,22 @@ export default function Navbar() {
           >
             🎲
           </button>
-          {searchOpen ? (
-            <form onSubmit={handleSearch} className="flex items-center">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search titles..."
-                autoFocus
-                className="bg-black/80 border border-red-600 text-white px-3 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-red-600 w-48"
-              />
-              <button type="button" onClick={() => setSearchOpen(false)} className="ml-2 text-white hover:text-red-500">
-                ✕
-              </button>
-            </form>
-          ) : (
-            <button onClick={() => setSearchOpen(true)} className="text-white hover:text-red-500 transition-colors">
-              <FaSearch size={18} />
-            </button>
-          )}
-          <button className="text-white hover:text-red-500 transition-colors relative">
-            <FaBell size={18} />
+
+          {/* Search — opens the full-screen search interface */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 hover:border-red-600 text-gray-300 hover:text-white rounded-full pl-3 pr-4 py-2 transition-all"
+            aria-label="Search"
+            title="Search (press /)"
+          >
+            <FaSearch size={14} className="text-red-500" />
+            <span className="hidden sm:inline text-sm">Search</span>
           </button>
-          
+          {searchOpen && <SearchSuggestions onClose={() => setSearchOpen(false)} />}
+
+          {/* What's-new notifications */}
+          <NotificationsMenu />
+
           {/* Profile Dropdown */}
           <div ref={profileRef} className="relative">
             <button
@@ -114,7 +113,7 @@ export default function Navbar() {
             >
               <FaUser size={14} className="text-white" />
             </button>
-            
+
             {profileOpen && (
               <div className="absolute right-0 top-12 w-48 bg-black/95 border border-red-600 rounded-lg shadow-lg overflow-hidden">
                 <Link
@@ -124,6 +123,14 @@ export default function Navbar() {
                 >
                   <FaHome size={16} className="text-red-500" />
                   <span>Home</span>
+                </Link>
+                <Link
+                  href="/my-list"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-white hover:bg-red-600/20 transition-colors border-t border-gray-800"
+                >
+                  <FaListUl size={16} className="text-red-500" />
+                  <span>My List</span>
                 </Link>
                 <Link
                   href="/history"
@@ -136,6 +143,9 @@ export default function Navbar() {
               </div>
             )}
           </div>
+
+          {/* Mobile hamburger */}
+          <MobileMenu />
         </div>
       </div>
     </nav>

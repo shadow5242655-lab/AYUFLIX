@@ -1,118 +1,143 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { FaForward, FaSpinner } from 'react-icons/fa';
 
-// Only working servers
-const HARDCODED_SERVERS = [
-  {
-    id: 'vidlink',
-    name: 'VidLink',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://vidlink.pro/tv/${id}/${season}/${episode}`;
-      return `https://vidlink.pro/movie/${id}`;
-    }
-  },
-  {
-  id: 'vidking',
-  name: 'VidKing',
-  getUrl: (id, type, season, episode) => {
-    if (type === 'tv') return `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`;
-    return `https://www.vidking.net/embed/movie/${id}`;
-  }
-},
-  {
-    id: 'vidsrc_wiki',
-    name: 'VidSrc',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://v1.vidsrc.wiki/embed/tv/${id}/${season}/${episode}/`;
-      return `https://v1.vidsrc.wiki/embed/movie/${id}/`;
-    }
-  },
-  {
-    id: '2embed',
-    name: '2Embed',
-    getUrl: (id, type, season, episode) => {
-      if (type === 'tv') return `https://www.2embed.cc/embed/${id}?s=${season}&e=${episode}`;
-      return `https://www.2embed.cc/embed/${id}`;
-    }
-  },
-];
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { FaSpinner, FaRedo } from 'react-icons/fa';
+import { BUILTIN_SERVERS, buildServerUrl } from '@/lib/videoServers';
+import { loadPlayerServers } from '@/lib/adminConfig';
 
-// Convert custom server storage format to player format
-function buildCustomServers(customServers) {
-  return customServers.map((cs) => ({
-    id: cs.id,
-    name: cs.name,
-    isCustom: true,
-    getUrl: (mediaId, type, season, episode) => {
-      let url = type === 'tv' ? cs.tvUrl : cs.movieUrl;
-      if (!url) url = cs.movieUrl;
-      return url
-        .replace('{id}', mediaId)
-        .replace('{season}', season)
-        .replace('{episode}', episode);
-    }
-  }));
-}
+// How long to wait for a server to respond before auto-switching to the next one
+const SERVER_TIMEOUT_MS = 6000;
+const LAST_SERVER_KEY = 'ayuflix_last_server';
 
-// Function to get filtered servers based on admin settings
-function getFilteredServers() {
+// Fallback used before the shared config loads (or if the API is unreachable)
+const FALLBACK_SERVERS = BUILTIN_SERVERS.map((s) => ({
+  id: s.id,
+  name: s.name,
+  getUrl: (mediaId, type, season, episode) => buildServerUrl(s, mediaId, type, season, episode),
+}));
+
+function readLastServer() {
+  if (typeof window === 'undefined') return '';
   try {
-    const savedCustom = localStorage.getItem('ayuflix_custom_servers');
-    const customServers = savedCustom ? buildCustomServers(JSON.parse(savedCustom)) : [];
-
-    const mergedMap = new Map();
-    HARDCODED_SERVERS.forEach((s) => mergedMap.set(s.id, s));
-    customServers.forEach((s) => mergedMap.set(s.id, s));
-    const allServers = Array.from(mergedMap.values());
-
-    const savedStatus = localStorage.getItem('ayuflix_admin_server_status');
-    if (savedStatus) {
-      const status = JSON.parse(savedStatus);
-      const enabledServers = allServers.filter((s) => status[s.id]?.enabled !== false);
-      if (enabledServers.length > 0) {
-        return enabledServers;
-      }
-    }
-    return allServers;
+    return localStorage.getItem(LAST_SERVER_KEY) || '';
   } catch {
-    return HARDCODED_SERVERS;
+    return '';
   }
 }
 
 export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episode = 1, onNextEpisode, hasNextEpisode }) {
-  const [activeServerId, setActiveServerId] = useState(HARDCODED_SERVERS[0].id);
-  const [servers, setServers] = useState(HARDCODED_SERVERS);
+  const [servers, setServers] = useState(FALLBACK_SERVERS);
+  const [serverIndex, setServerIndex] = useState(0);
   const [videoUrl, setVideoUrl] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'failed'
+  const [skipped, setSkipped] = useState([]); // names of servers that timed out
+  const [nonce, setNonce] = useState(0); // bumped on manual retry to re-arm the timer
+  const [startedVia, setStartedVia] = useState('auto');
 
-  // Load servers on mount and listen for storage changes
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+  const timeoutRef = useRef(null);
+
+  // Load servers from the shared admin config and poll for changes,
+  // so admin edits go live for every visitor without a reload.
   useEffect(() => {
-    const updateServers = () => {
-      const filteredServers = getFilteredServers();
-      setServers(filteredServers);
-      
-      const currentServerExists = filteredServers.some((s) => s.id === activeServerId);
-      if (!currentServerExists && filteredServers.length > 0) {
-        setActiveServerId(filteredServers[0].id);
-      }
+    let cancelled = false;
+    const load = () => {
+      loadPlayerServers()
+        .then((list) => {
+          if (cancelled || list.length === 0) return;
+          setServers(list);
+        })
+        .catch(() => {
+          // keep fallback servers
+        });
     };
+    load();
+    const interval = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
-    updateServers();
-    window.addEventListener('storage', updateServers);
-    
-    return () => window.removeEventListener('storage', updateServers);
-  }, [activeServerId]);
+  // Signature of every server's URL for this media — changes only when the
+  // admin edits URLs or media changes, so the 30s poll doesn't restart playback.
+  const urlSignature = useMemo(
+    () => servers.map((s) => `${s.id}:${s.getUrl(mediaId, type, season, episode)}`).join('|'),
+    [servers, mediaId, type, season, episode]
+  );
 
-  // Generate video URL when server or media changes
+  const activeIndex = Math.min(serverIndex, servers.length - 1);
+  const activeServer = servers[activeIndex];
+  const attempt = activeIndex + 1;
+
+  // If the active server was removed/disabled by an admin, restart from the first
   useEffect(() => {
-    const server = servers.find((s) => s.id === activeServerId) || servers[0];
-    if (!server) return;
-    const url = server.getUrl(mediaId, type, season, episode);
-    setVideoUrl(url);
-  }, [activeServerId, servers, mediaId, type, season, episode]);
+    if (serverIndex > 0 && !servers[serverIndex]) {
+      setServerIndex(0);
+    }
+  }, [servers, serverIndex]);
 
-  // All servers disabled
+  // Remember last server: start playback there if it's still enabled
+  useEffect(() => {
+    const last = readLastServer();
+    if (!last) return;
+    const idx = servers.findIndex((s) => s.id === last);
+    if (idx > 0) {
+      setServerIndex(idx);
+      setStartedVia('memory');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSignature]);
+
+  // Generate the video URL and arm the 6-second auto-fallback timer.
+  // If the server doesn't respond in time, we automatically try the next one.
+  useEffect(() => {
+    const list = serversRef.current;
+    if (list.length === 0) return;
+    const idx = Math.min(serverIndex, list.length - 1);
+    const server = list[idx];
+    if (!server) return;
+
+    setVideoUrl(server.getUrl(mediaId, type, season, episode));
+    setStatus('loading');
+
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      // Server didn't respond within the timeout — mark it skipped and fall back
+      setSkipped((prev) => (prev.includes(server.name) ? prev : [...prev, server.name]));
+      if (idx < list.length - 1) {
+        setServerIndex(idx + 1); // triggers this effect again for the next server
+      } else {
+        setStatus('failed'); // every server timed out
+      }
+    }, SERVER_TIMEOUT_MS);
+
+    return () => clearTimeout(timeoutRef.current);
+  }, [serverIndex, mediaId, type, season, episode, urlSignature, nonce]);
+
+  // Clear any pending timer on unmount
+  useEffect(() => () => clearTimeout(timeoutRef.current), []);
+
+  // The iframe fired onLoad — the server responded, stop the timer
+  const handleIframeLoad = () => {
+    clearTimeout(timeoutRef.current);
+    setStatus('ready');
+    // Persist so the next playback starts on this server
+    try {
+      localStorage.setItem(LAST_SERVER_KEY, activeServer?.id || '');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRetry = () => {
+    setSkipped([]);
+    setServerIndex(0);
+    setNonce((n) => n + 1);
+    setStartedVia('manual');
+  };
+
   if (servers.length === 0) {
     return (
       <div className="w-full bg-gray-900 rounded-xl border-2 border-gray-700 p-8 text-center">
@@ -125,15 +150,15 @@ export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episo
     <div className="w-full">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-white text-lg sm:text-xl font-bold flex items-center gap-2">
-          <span className="w-2 h-2 bg-red-600 rounded-full"></span>
+          <span className="w-2 h-2 bg-red-600 rounded-full" />
           Now Playing
         </h2>
         {type === 'tv' && hasNextEpisode && onNextEpisode && (
           <button
+            type="button"
             onClick={onNextEpisode}
             className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
           >
-            <FaForward size={14} />
             Next Episode
           </button>
         )}
@@ -141,47 +166,100 @@ export default function VideoPlayer({ mediaId, type = 'movie', season = 1, episo
 
       <div className="relative w-full bg-black rounded-xl overflow-hidden border-2 sm:border-4 border-red-600">
         <div className="relative pt-[56.25%]">
-          {loading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black">
-              <div className="text-center">
-                <FaSpinner className="text-red-600 text-3xl animate-spin mx-auto mb-3" />
-                <p className="text-gray-400 text-sm">Loading...</p>
-              </div>
-            </div>
-          ) : (
+          {videoUrl ? (
             <iframe
-              key={`${mediaId}-${season}-${episode}-${activeServerId}`}
+              key={`${mediaId}-${type}-${season}-${episode}-${activeServer?.id}-${nonce}`}
               src={videoUrl}
               className="absolute inset-0 w-full h-full"
               allowFullScreen
               allow="autoplay; encrypted-media; fullscreen"
+              onLoad={handleIframeLoad}
             />
+          ) : null}
+
+          {status === 'loading' && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+              <div className="text-center px-4">
+                <FaSpinner className="text-red-600 text-3xl animate-spin mx-auto mb-3" />
+                <p className="text-white text-sm sm:text-base font-semibold">
+                  Loading from {activeServer?.name || 'server'}...
+                </p>
+                <p className="text-gray-500 text-xs mt-1.5">
+                  Server {attempt} of {servers.length} — switching automatically if it doesn&apos;t respond
+                </p>
+                {startedVia === 'memory' && (
+                  <p className="text-gray-600 text-[10px] mt-1">Starting on your last-used server</p>
+                )}
+                {skipped.length > 0 && (
+                  <p className="text-yellow-500/80 text-xs mt-2">Skipped: {skipped.join(', ')}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {status === 'failed' && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+              <div className="text-center px-4">
+                <p className="text-red-500 text-lg font-bold mb-1">😢 No server responded</p>
+                <p className="text-gray-400 text-xs sm:text-sm mb-4">
+                  All {servers.length} servers timed out. Check your connection and try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
+                >
+                  <FaRedo className="text-xs" />
+                  Retry
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       <p className="text-gray-400 text-xs text-center mt-2">
-        If video doesn&apos;t load, switch server below
+        If video doesn&apos;t load, switch server below — or wait, we auto-fallback every 6 seconds
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-3">
         <span className="text-gray-400 text-xs sm:text-sm mr-1">Server:</span>
-        {servers.map((server) => (
-          <button
-            key={server.id}
-            onClick={() => setActiveServerId(server.id)}
-            className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all ${
-              activeServerId === server.id
-                ? 'bg-red-600 text-white'
-                : server.isCustom
-                  ? 'bg-purple-800 text-purple-200 hover:bg-purple-700'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-            }`}
-          >
-            {server.name}
-          </button>
-        ))}
+        {servers.map((server, index) => {
+          const isSkipped = skipped.includes(server.name);
+          const isActive = activeIndex === index;
+          return (
+            <button
+              key={server.id}
+              type="button"
+              onClick={() => setServerIndex(index)}
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all flex items-center gap-1.5 ${
+                isActive
+                  ? 'bg-red-600 text-white'
+                  : isSkipped
+                    ? 'bg-gray-900 text-gray-600 line-through opacity-60 hover:opacity-100'
+                    : server.isCustom
+                      ? 'bg-purple-800 text-purple-200 hover:bg-purple-700'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+              }`}
+              title={isSkipped ? `${server.name} timed out earlier` : server.name}
+            >
+              {/* Status dot: green ready / yellow trying / red skipped */}
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isActive && status === 'ready'
+                    ? 'bg-green-400'
+                    : isActive && status === 'loading'
+                      ? 'bg-yellow-400 animate-pulse'
+                      : isSkipped
+                        ? 'bg-red-900'
+                        : 'bg-gray-600'
+                }`}
+              />
+              {server.name}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
-    }
+}

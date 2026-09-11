@@ -4,14 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { FaChevronLeft, FaChevronRight, FaPlay, FaTrash } from 'react-icons/fa';
 import { imageUrl } from '@/lib/tmdb';
+import { readJSON, writeJSON, KEYS } from '@/lib/watchData';
 
 export default function ContinueWatchingRow() {
   const [items, setItems] = useState([]);
   const rowRef = useRef(null);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
-    setItems(stored);
+    const stored = readJSON(KEYS.continue);
+    setItems(Array.isArray(stored) ? stored : []);
   }, []);
 
   if (items.length === 0) return null;
@@ -29,7 +30,7 @@ export default function ContinueWatchingRow() {
   const removeItem = (id) => {
     const updated = items.filter((i) => i.id !== id);
     setItems(updated);
-    localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+    writeJSON(KEYS.continue, updated);
   };
 
   const formatTime = (iso) => {
@@ -43,6 +44,20 @@ export default function ContinueWatchingRow() {
     return `${days}d ago`;
   };
 
+  const getProgressPercent = (item) => {
+    if (item.mediaType === 'tv' && item.season && item.episode && item.totalEpisodes) {
+      return Math.min(100, Math.round(((item.episode - 1) / item.totalEpisodes) * 100));
+    }
+    return 45;
+  };
+
+  const getSubtitle = (item) => {
+    if (item.mediaType === 'tv' && item.season && item.episode) {
+      return `S${item.season}:E${item.episode}`;
+    }
+    return formatTime(item.lastWatched);
+  };
+
   return (
     <div className="relative group/row px-4 md:px-8 mb-8">
       <div className="flex items-center justify-between mb-3">
@@ -50,7 +65,7 @@ export default function ContinueWatchingRow() {
         <button
           onClick={() => {
             setItems([]);
-            localStorage.removeItem('ayuflix-continue');
+            writeJSON(KEYS.continue, []);
           }}
           className="flex items-center gap-1 text-gray-400 hover:text-red-500 text-xs transition-colors"
         >
@@ -96,17 +111,31 @@ export default function ContinueWatchingRow() {
 
                 {/* Red progress bar at bottom */}
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-                  <div className="h-full bg-red-600" style={{ width: '45%' }} />
+                  <div className="h-full bg-red-600" style={{ width: `${getProgressPercent(item)}%` }} />
                 </div>
 
                 {/* Continue badge */}
                 <div className="absolute top-1 left-1 bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded font-medium">
                   Continue
                 </div>
+
+                {/* Per-item remove button */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeItem(item.id);
+                  }}
+                  className="absolute top-1 right-1 w-6 h-6 bg-black/80 hover:bg-red-600 rounded-full items-center justify-center hidden group-hover/card:flex"
+                  aria-label={`Remove ${item.title} from Continue Watching`}
+                  title="Remove"
+                >
+                  <FaTrash size={10} className="text-white" />
+                </button>
               </div>
 
               <p className="text-gray-300 text-xs mt-1 truncate">{item.title}</p>
-              <p className="text-gray-500 text-[10px]">{formatTime(item.lastWatched)}</p>
+              <p className="text-gray-500 text-[10px]">{getSubtitle(item)}</p>
             </Link>
           ))}
         </div>

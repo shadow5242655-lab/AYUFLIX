@@ -5,8 +5,9 @@ import { imageUrl } from '@/lib/tmdb';
 import { FaPlay } from 'react-icons/fa';
 
 export default function MovieCard({ movie }) {
+  const isTv = movie.media_type === 'tv' || movie.first_air_date || (!movie.release_date && movie.name);
   return (
-    <Link href={`/movie/${movie.id}`} className="group relative flex-shrink-0 w-44 cursor-pointer z-0">
+    <Link href={isTv ? `/tv/${movie.id}` : `/movie/${movie.id}`} className="group relative flex-shrink-0 w-44 cursor-pointer z-0">
       <div className="relative overflow-hidden rounded-md transition-all duration-300 group-hover:scale-110 group-hover:z-30 group-hover:ring-4 group-hover:ring-red-600 group-hover:shadow-red-glow">
         <img
           src={imageUrl(movie.poster_path, 'w500')}
@@ -15,9 +16,16 @@ export default function MovieCard({ movie }) {
         />
 
         {/* Rating Badge */}
-        <div className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded">
-          ⭐ {movie.vote_average?.toFixed(1)}
-        </div>
+        {movie.vote_average > 0 && (
+          <div className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded">
+            ⭐ {movie.vote_average?.toFixed(1)}
+          </div>
+        )}
+        {isTv && (
+          <div className="absolute top-2 right-2 bg-black/70 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-red-600/60">
+            TV
+          </div>
+        )}
 
         {/* Play Icon Overlay */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Keep crawlers out of the admin panel and APIs
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://ayuflix.vercel.app/sitemap.xml

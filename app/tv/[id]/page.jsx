@@ -2,21 +2,27 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { getTvDetails, getTvCredits, getSimilarTv, imageUrl, fetchTrailer } from '@/lib/tmdb';
+import { getTvDetails, getTvCredits, getSimilarTv, getTvRecommendations, imageUrl, fetchTrailer } from '@/lib/tmdb';
+import { toggleMyListItem, isInMyList } from '@/lib/myList';
+import { toast } from '@/lib/toast';
 import VideoPlayer from '@/components/VideoPlayer';
 import TrailerModal from '@/components/TrailerModal';
 import SeasonSelector from '@/components/SeasonSelector';
 import EpisodeList from '@/components/EpisodeList';
 import MovieCard from '@/components/MovieCard';
-import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm } from 'react-icons/fa';
+import StarRating from '@/components/StarRating';
+import CastList from '@/components/CastList';
+import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm, FaShareAlt } from 'react-icons/fa';
 import Link from 'next/link';
 import { markEpisodeWatched, getNextUnwatchedEpisode, getSeasonWatchedCount } from '@/lib/episodeTracker';
 
 export default function TvDetailPage() {
   const { id } = useParams();
   const [tvData, setTvData] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const [credits, setCredits] = useState(null);
   const [similar, setSimilar] = useState([]);
+  const [recommended, setRecommended] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
@@ -27,18 +33,36 @@ export default function TvDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    setNotFound(false);
+    setTvData(null);
     Promise.all([
       getTvDetails(id),
       getTvCredits(id),
       getSimilarTv(id),
-    ]).then(([data, creditsData, similarData]) => {
+      getTvRecommendations(id),
+    ]).then(([data, creditsData, similarData, recData]) => {
+      if (!data?.id) {
+        setNotFound(true);
+        return;
+      }
       setTvData(data);
       setCredits(creditsData);
       setSimilar(similarData);
+      setRecommended(recData || []);
+      document.title = `${data.name} (${data.first_air_date?.slice(0, 4) || ''}) — AYUFLIX`;
 
       // Check if in My List
-      const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
-      setInMyList(myList.some((item) => item.id === data.id));
+      setInMyList(isInMyList(data.id));
+
+      // Resume from Continue Watching if available
+      try {
+        const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
+        const saved = continueWatching.find((i) => i.id === data.id);
+        if (saved?.season && saved.season !== season) setSeason(saved.season);
+        if (saved?.episode && saved.episode !== episode) setEpisode(saved.episode);
+      } catch {
+        // Ignore corrupt storage
+      }
 
       // Save to history
       const historyItem = {
@@ -53,7 +77,8 @@ export default function TvDetailPage() {
       const filteredHistory = existingHistory.filter((item) => item.id !== data.id);
       const updatedHistory = [historyItem, ...filteredHistory].slice(0, 50);
       localStorage.setItem('ayuflix-history', JSON.stringify(updatedHistory));
-    });
+    }).catch(() => setNotFound(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Update season progress when season/episode changes
@@ -65,8 +90,9 @@ export default function TvDetailPage() {
     setSeasonProgress({ watched, total: epCount });
   }, [id, season, tvData]);
 
-  const handlePlay = () => {
-    // Save to continue watching
+  const saveToContinueWatching = useCallback((s, e) => {
+    if (!tvData) return;
+    const currentSeasonData = tvData.seasons?.find((x) => x.season_number === s);
     const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
     const item = {
       id: tvData.id,
@@ -74,13 +100,23 @@ export default function TvDetailPage() {
       posterPath: tvData.poster_path,
       backdropPath: tvData.backdrop_path,
       mediaType: 'tv',
-      season: season,
-      episode: episode,
+      season: s,
+      episode: e,
+      totalEpisodes: currentSeasonData?.episode_count || 0,
       lastWatched: new Date().toISOString(),
     };
     const filtered = continueWatching.filter((i) => i.id !== tvData.id);
     const updated = [item, ...filtered].slice(0, 20);
     localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+  }, [tvData]);
+
+  const handlePlay = () => {
+    if (playing) {
+      setPlaying(false);
+      toast('Player paused — scroll down to resume', 'info');
+      return;
+    }
+    saveToContinueWatching(season, episode);
 
     // Mark current episode as watched
     markEpisodeWatched(tvData.id, season, episode);
@@ -91,6 +127,11 @@ export default function TvDetailPage() {
     const epCount = currentSeasonData?.episode_count || 0;
     const watched = getSeasonWatchedCount(tvData.id, season, epCount);
     setSeasonProgress({ watched, total: epCount });
+
+    // Scroll player into view
+    setTimeout(() => {
+      document.getElementById('ayuflix-player')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
   };
 
   const handleNextEpisode = useCallback(() => {
@@ -105,26 +146,16 @@ export default function TvDetailPage() {
 
     const next = getNextUnwatchedEpisode(tvData.id, season, episode, totalSeasons, episodesPerSeason);
     if (next) {
+      // Mark the episode we're leaving as watched
+      markEpisodeWatched(tvData.id, season, episode);
       setSeason(next.season);
       setEpisode(next.episode);
-
-      // Update continue watching
-      const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
-      const item = {
-        id: tvData.id,
-        title: tvData.name,
-        posterPath: tvData.poster_path,
-        backdropPath: tvData.backdrop_path,
-        mediaType: 'tv',
-        season: next.season,
-        episode: next.episode,
-        lastWatched: new Date().toISOString(),
-      };
-      const filtered = continueWatching.filter((i) => i.id !== tvData.id);
-      const updated = [item, ...filtered].slice(0, 20);
-      localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+      saveToContinueWatching(next.season, next.episode);
+      toast(`▶️ S${next.season}:E${next.episode} loaded`, 'success');
+    } else {
+      toast("🎉 You're all caught up on this show!", 'info');
     }
-  }, [tvData, season, episode]);
+  }, [tvData, season, episode, saveToContinueWatching]);
 
   const handleWatchTrailer = async () => {
     if (!id) return;
@@ -133,28 +164,50 @@ export default function TvDetailPage() {
       setTrailerKey(key);
       setShowTrailer(true);
     } else {
-      alert('🚫 No trailer available for this title.');
+      toast('🚫 No trailer available for this title.', 'error');
     }
   };
 
-  const toggleMyList = () => {
-    const myList = JSON.parse(localStorage.getItem('ayuflix-mylist') || '[]');
-    if (inMyList) {
-      const updated = myList.filter((item) => item.id !== tvData.id);
-      localStorage.setItem('ayuflix-mylist', JSON.stringify(updated));
-      setInMyList(false);
-    } else {
-      const newItem = {
-        id: tvData.id,
-        title: tvData.name,
-        posterPath: tvData.poster_path,
-        mediaType: 'tv',
-        addedAt: new Date().toISOString(),
-      };
-      localStorage.setItem('ayuflix-mylist', JSON.stringify([newItem, ...myList]));
-      setInMyList(true);
+  const toggleList = () => {
+    const nowIn = toggleMyListItem({
+      id: tvData.id,
+      title: tvData.name,
+      posterPath: tvData.poster_path,
+      mediaType: 'tv',
+    });
+    setInMyList(nowIn);
+    toast(nowIn ? '✅ Added to My List' : 'Removed from My List', 'success');
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `${tvData.name} — AYUFLIX`,
+      text: `Watch ${tvData.name} on AYUFLIX!`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast('🔗 Link copied to clipboard!', 'success');
+      }
+    } catch {
+      // User cancelled share
     }
   };
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-red-500 text-xl font-bold">Show not found 😕</p>
+        <p className="text-gray-500 text-sm">It may have been removed or the link is wrong.</p>
+        <Link href="/" className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors">
+          Back to home
+        </Link>
+      </div>
+    );
+  }
 
   if (!tvData) {
     return (
@@ -164,7 +217,7 @@ export default function TvDetailPage() {
     );
   }
 
-  const cast = credits?.cast?.slice(0, 6) || [];
+  // cast rendering handled by CastList component
   const hasNextEpisode = getNextUnwatchedEpisode(
     tvData.id,
     season,
@@ -212,12 +265,13 @@ export default function TvDetailPage() {
             </p>
             <p className="text-gray-300 mb-6 leading-relaxed">{tvData.overview}</p>
 
-            {cast.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-white font-semibold mb-2">Cast</h3>
-                <p className="text-gray-400 text-sm">{cast.map((c) => c.name).join(', ')}</p>
-              </div>
-            )}
+            {/* Cast — clickable, links to person pages */}
+            <CastList cast={credits?.cast || []} limit={8} />
+
+            {/* User Rating */}
+            <div className="mb-6">
+              <StarRating mediaId={tvData.id} title={tvData.name} />
+            </div>
 
             {/* Season Progress */}
             <div className="mb-6">
@@ -255,12 +309,12 @@ export default function TvDetailPage() {
                   </>
                 )}
               </button>
-              
+
               <button
-                onClick={toggleMyList}
+                onClick={toggleList}
                 className={`flex items-center gap-2 px-6 py-3 rounded font-medium transition-all ${
-                  inMyList 
-                    ? 'bg-white/20 text-white border border-white/40' 
+                  inMyList
+                    ? 'bg-white/20 text-white border border-white/40'
                     : 'bg-gray-700/80 text-white border border-gray-600 hover:bg-gray-600'
                 }`}
               >
@@ -274,10 +328,19 @@ export default function TvDetailPage() {
               >
                 <FaFilm size={18} /> Watch Trailer
               </button>
+
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2 bg-gray-700/80 hover:bg-gray-600 text-white border border-gray-600 px-6 py-3 rounded font-medium transition-all"
+              >
+                <FaShareAlt size={16} /> Share
+              </button>
             </div>
 
             <SeasonSelector
               tvId={tvData.id}
+              season={season}
+              episode={episode}
               onSeasonChange={setSeason}
               onEpisodeChange={setEpisode}
             />
@@ -296,7 +359,7 @@ export default function TvDetailPage() {
         )}
 
         {/* Episode List */}
-        <div className="mt-6">
+        {tvData.seasons?.length > 0 ? (
           <EpisodeList
             tvId={tvData.id}
             tvData={tvData}
@@ -304,35 +367,48 @@ export default function TvDetailPage() {
             currentEpisode={episode}
             onEpisodeSelect={(ep) => {
               setEpisode(ep);
-              // Update progress
               const currentSeasonData = tvData.seasons?.find((s) => s.season_number === season);
               const epCount = currentSeasonData?.episode_count || 0;
               const watched = getSeasonWatchedCount(tvData.id, season, epCount);
               setSeasonProgress({ watched, total: epCount });
+              saveToContinueWatching(season, ep);
             }}
+          />
+        ) : (
+          <p className="text-gray-400 text-sm">No episodes available for this show.</p>
+        )}
+
+        {/* Video Player - Always visible */}
+        <div id="ayuflix-player" className="mt-4">
+          <VideoPlayer
+            mediaId={tvData.id}
+            type="tv"
+            season={season}
+            episode={episode}
+            hasNextEpisode={hasNextEpisode}
+            onNextEpisode={handleNextEpisode}
           />
         </div>
 
-        {/* Video Player - Always visible */}
-<div className="mt-4">
-  <VideoPlayer
-    mediaId={tvData.id}
-    type="tv"
-    season={season}
-    episode={episode}
-    hasNextEpisode={hasNextEpisode}
-    onNextEpisode={handleNextEpisode}
-  />
-</div>
+        {/* Recommended for you (TMDB recommendations) */}
+        {recommended.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-xl font-bold text-white mb-4">Recommended For You</h2>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-4">
+              {recommended.slice(0, 20).map((m) => (
+                <MovieCard key={m.id} movie={{ ...m, media_type: 'tv' }} />
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Similar Shows */}
         {similar.length > 0 && (
-          <div className="mt-12 mb-16">
+          <div className="mt-8 mb-16">
             <h2 className="text-xl font-bold text-white mb-4">More Like This</h2>
             <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-4">
               {similar.map((m) => (
-                <MovieCard key={m.id} movie={m} />
+                <MovieCard key={m.id} movie={{ ...m, media_type: 'tv' }} />
               ))}
             </div>
           </div>

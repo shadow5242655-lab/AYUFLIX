@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getTvDetails } from '@/lib/tmdb';
 
-export default function SeasonSelector({ tvId, onSeasonChange, onEpisodeChange }) {
+export default function SeasonSelector({ tvId, onSeasonChange, onEpisodeChange, season, episode }) {
   const [tvData, setTvData] = useState(null);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
@@ -21,10 +21,15 @@ export default function SeasonSelector({ tvId, onSeasonChange, onEpisodeChange }
     if (!tvId) return;
     getTvDetails(tvId).then((data) => {
       setTvData(data);
-      onSeasonChange(1);
-      onEpisodeChange(1);
     });
-  }, [tvId, onSeasonChange, onEpisodeChange]);
+  }, [tvId]);
+
+  // Sync with parent state (resume, next episode, episode list clicks)
+  useEffect(() => {
+    if (season && season !== selectedSeason) setSelectedSeason(season);
+    if (episode && episode !== selectedEpisode) setSelectedEpisode(episode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [season, episode]);
 
   if (!tvData) return null;
 

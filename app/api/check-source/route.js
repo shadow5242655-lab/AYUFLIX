@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { VIDEO_SERVERS, getServerUrl } from '@/lib/videoSources';
+import { BUILTIN_SERVERS, buildServerUrl } from '@/lib/videoServers';
 
 const ERROR_KEYWORDS = ['404', 'not found', 'file not found', 'does not exist', 'no video', 'unavailable', 'error', 'no results'];
 
 async function checkServer(server, type, id, season, episode) {
-  const url = getServerUrl(server, type, id, season, episode);
-  
+  const url = buildServerUrl(server, type, id, season, episode);
+  if (!url) return { success: false, serverId: server.id };
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    
+
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -17,22 +18,20 @@ async function checkServer(server, type, id, season, episode) {
       },
       redirect: 'follow',
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (response.ok) {
       const text = await response.text();
-      const hasError = ERROR_KEYWORDS.some(keyword => 
-        text.toLowerCase().includes(keyword)
-      );
-      
+      const hasError = ERROR_KEYWORDS.some((keyword) => text.toLowerCase().includes(keyword));
+
       if (!hasError && text.length > 100) {
         return { success: true, serverId: server.id, serverName: server.name };
       }
     }
-    
+
     return { success: false, serverId: server.id };
-  } catch (error) {
+  } catch {
     return { success: false, serverId: server.id };
   }
 }
@@ -43,19 +42,17 @@ export async function GET(request) {
   const type = searchParams.get('type') || 'movie';
   const season = searchParams.get('season') || '1';
   const episode = searchParams.get('episode') || '1';
-  
+
   if (!movieId) {
     return NextResponse.json({ success: false, message: 'movieId required' }, { status: 400 });
   }
-  
-  // Check all servers in parallel
-  const checks = VIDEO_SERVERS.map(server => 
-    checkServer(server, type, movieId, season, episode)
-  );
-  
+
+  // Check all builtin servers in parallel
+  const checks = BUILTIN_SERVERS.map((server) => checkServer(server, type, movieId, season, episode));
+
   try {
     const results = await Promise.allSettled(checks);
-    
+
     for (const result of results) {
       if (result.status === 'fulfilled' && result.value.success) {
         return NextResponse.json({
@@ -65,17 +62,17 @@ export async function GET(request) {
         });
       }
     }
-    
+
     // Return first server as fallback
     return NextResponse.json({
       success: false,
-      serverId: VIDEO_SERVERS[0].id,
-      serverName: VIDEO_SERVERS[0].name,
+      serverId: BUILTIN_SERVERS[0].id,
+      serverName: BUILTIN_SERVERS[0].name,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({
       success: false,
-      serverId: VIDEO_SERVERS[0].id,
+      serverId: BUILTIN_SERVERS[0].id,
     });
   }
 }

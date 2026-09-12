@@ -2,18 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import MovieCard from './MovieCard';
-import { FaHistory } from 'react-icons/fa';
-import { readJSON } from '@/lib/watchData';
+import { FaHistory, FaTimes } from 'react-icons/fa';
+import { readJSON, writeJSON } from '@/lib/watchData';
+import { toast } from '@/lib/toast';
+
+const HISTORY_KEY = 'ayuflix-history';
 
 /**
  * "Jump Back In" — shows the titles from this viewer's history (most recent first),
  * excluding whatever is currently in Continue Watching (that row handles those).
+ * Each card has a remove (✕) button to drop the title from history.
  */
 export default function RecentlyViewedRow() {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
-    const history = readJSON('ayuflix-history', []);
+    loadItems();
+  }, []);
+
+  const loadItems = () => {
+    const history = readJSON(HISTORY_KEY, []);
     const continueItems = readJSON('ayuflix-continue', []);
     const continueIds = new Set(continueItems.map((i) => i.id));
     setItems(
@@ -31,7 +39,17 @@ export default function RecentlyViewedRow() {
         }))
         .slice(0, 20)
     );
-  }, []);
+  };
+
+  const removeFromHistory = (item) => {
+    const history = readJSON(HISTORY_KEY, []);
+    writeJSON(
+      HISTORY_KEY,
+      history.filter((h) => h.id !== item.id)
+    );
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast(`Removed "${item.title}" from history`, 'info');
+  };
 
   if (items.length === 0) return null;
 
@@ -42,7 +60,19 @@ export default function RecentlyViewedRow() {
       </h2>
       <div className="flex gap-2.5 overflow-x-auto hide-scrollbar pb-4">
         {items.map((m) => (
-          <MovieCard key={`${m.media_type}-${m.id}`} movie={m} />
+          <div key={`${m.media_type}-${m.id}`} className="relative flex-shrink-0 group/remove">
+            <MovieCard movie={m} />
+            {/* Remove from history */}
+            <button
+              type="button"
+              onClick={() => removeFromHistory(m)}
+              className="absolute -top-1.5 -right-1.5 z-40 w-6 h-6 rounded-full bg-gray-900 border border-gray-600 text-gray-400 hover:bg-red-600 hover:border-red-600 hover:text-white flex items-center justify-center md:opacity-0 md:group-hover/remove:opacity-100 transition-all shadow-lg"
+              title={`Remove "${m.title}" from history`}
+              aria-label={`Remove ${m.title} from history`}
+            >
+              <FaTimes size={10} />
+            </button>
+          </div>
         ))}
       </div>
     </div>

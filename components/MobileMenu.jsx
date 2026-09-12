@@ -8,9 +8,16 @@ const LINKS = [
   { href: '/', label: 'Home' },
   { href: '/browse/tv', label: 'TV Shows' },
   { href: '/browse/movie', label: 'Movies' },
+  { href: '/genre/movie', label: 'Genres' },
+  { href: '/calendar', label: '📅 TV Calendar' },
+  { href: '/movie-night', label: '🌙 Movie Night' },
   { href: '/my-list', label: 'My List' },
+  { href: '/my-lists', label: '🗂️ Custom Lists' },
   { href: '/history', label: 'History' },
-  { href: '/my-stats', label: 'My Stats' },
+  { href: '/my-stats', label: '📊 My Stats' },
+  { href: '/achievements', label: '🏆 Achievements' },
+  { href: '/settings', label: '⚙️ Settings' },
+  { href: '/about', label: 'About' },
 ];
 
 export default function MobileMenu() {

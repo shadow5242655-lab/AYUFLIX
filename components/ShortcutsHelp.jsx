@@ -5,9 +5,11 @@ import { FaTimes, FaDice } from 'react-icons/fa';
 
 const SHORTCUTS = [
   { keys: '/', desc: 'Open search' },
+  { keys: 'Ctrl+K', desc: 'Command palette — jump anywhere' },
   { keys: 'm', desc: 'Surprise me — random movie or show' },
-  { keys: 'n', desc: 'Next episode (on a TV page)' },
-  { keys: 'b', desc: 'Previous episode (on a TV page)' },
+  { keys: '1-9', desc: 'Switch player server (while watching)' },
+  { keys: 'T', desc: 'Theater mode (while watching)' },
+  { keys: 'F', desc: 'Fullscreen player (while watching)' },
   { keys: 'Esc', desc: 'Close any overlay' },
   { keys: '?', desc: 'Show this help' },
 ];

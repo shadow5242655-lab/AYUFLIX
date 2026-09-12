@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FaSearch, FaTimes, FaClock, FaTv, FaFilm, FaFireAlt } from 'react-icons/fa';
+import { FaSearch, FaTimes, FaClock, FaTv, FaFilm, FaFireAlt, FaMicrophone } from 'react-icons/fa';
 import { searchMulti, imageUrl, getTrending } from '@/lib/tmdb';
 
 const RECENT_KEY = 'ayuflix_recent_searches';
@@ -25,8 +25,10 @@ export default function SearchSuggestions({ onClose }) {
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(false);
   const [recent, setRecent] = useState([]);
+  const [listening, setListening] = useState(false);
   const inputRef = useRef(null);
   const overlayRef = useRef(null);
+  const recRef = useRef(null);
 
   useEffect(() => {
     setRecent(readRecent());
@@ -76,6 +78,36 @@ export default function SearchSuggestions({ onClose }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Voice search (Chrome/Edge); graceful no-op where unsupported
+  const startVoice = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (listening) {
+      recRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    try {
+      const rec = new SR();
+      recRef.current = rec;
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.onresult = (event) => {
+        const said = event.results?.[0]?.[0]?.transcript;
+        if (said) {
+          setQuery(said);
+          inputRef.current?.focus();
+        }
+      };
+      rec.onend = () => setListening(false);
+      rec.onerror = () => setListening(false);
+      rec.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  };
 
   const submitSearch = (e) => {
     e.preventDefault();
@@ -129,6 +161,19 @@ export default function SearchSuggestions({ onClose }) {
               autoComplete="off"
             />
             {loading && <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />}
+            {typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition) && (
+              <button
+                type="button"
+                onClick={startVoice}
+                className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+                  listening ? 'bg-red-600 text-white animate-pulse-soft' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+                title={listening ? 'Listening… speak now' : 'Search by voice'}
+                aria-label="Voice search"
+              >
+                <FaMicrophone size={13} />
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

@@ -2,14 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { getMovieDetails, getMovieCredits, getSimilarMovies, getMovieRecommendations, imageUrl, fetchTrailer } from '@/lib/tmdb';
+import { getMovieDetails, getMovieCredits, getSimilarMovies, getMovieRecommendations, getMovieImages, imageUrl, fetchTrailer } from '@/lib/tmdb';
 import { toggleMyListItem, isInMyList } from '@/lib/myList';
 import { toast } from '@/lib/toast';
+import { readJSON, writeJSON } from '@/lib/watchData';
+import { markWatchActivity, evaluateAchievements } from '@/lib/achievement';
 import VideoPlayer from '@/components/VideoPlayer';
 import TrailerModal from '@/components/TrailerModal';
 import MovieCard from '@/components/MovieCard';
 import StarRating from '@/components/StarRating';
 import CastList from '@/components/CastList';
+import CommentsSection from '@/components/CommentsSection';
+import PhotoGallery from '@/components/PhotoGallery';
+import TitleFacts from '@/components/TitleFacts';
+import SaveToList from '@/components/SaveToList';
 import { FaPlay, FaPause, FaArrowLeft, FaPlus, FaCheck, FaFilm, FaShareAlt } from 'react-icons/fa';
 import Link from 'next/link';
 
@@ -24,6 +30,7 @@ export default function MovieDetailPage() {
   const [inMyList, setInMyList] = useState(false);
   const [trailerKey, setTrailerKey] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
+  const [gallery, setGallery] = useState([]);
 
   useEffect(() => {
     if (!id) return;
@@ -49,21 +56,32 @@ export default function MovieDetailPage() {
       // Check if in My List
       setInMyList(isInMyList(movieData.id));
 
-      // Save to history
+      // Save to history (with genres for the Explorer achievement)
       const historyItem = {
         id: movieData.id,
         title: movieData.title,
         posterPath: movieData.poster_path,
         mediaType: 'movie',
+        genreIds: (movieData.genres || []).map((g) => g.id),
         watchedAt: new Date().toISOString(),
       };
 
-      const existingHistory = JSON.parse(localStorage.getItem('ayuflix-history') || '[]');
+      const existingHistory = readJSON('ayuflix-history', []);
       const filteredHistory = existingHistory.filter((item) => item.id !== movieData.id);
-      const updatedHistory = [historyItem, ...filteredHistory].slice(0, 50);
-      localStorage.setItem('ayuflix-history', JSON.stringify(updatedHistory));
+      writeJSON('ayuflix-history', [historyItem, ...filteredHistory].slice(0, 50));
     })
     .catch(() => setNotFound(true));
+  }, [id]);
+
+  // Load gallery images
+  useEffect(() => {
+    if (!id) return;
+    getMovieImages(id)
+      .then((data) => {
+        const urls = (data?.backdrops || []).slice(0, 10).map((b) => imageUrl(b.file_path, 'w780'));
+        setGallery(urls);
+      })
+      .catch(() => setGallery([]));
   }, [id]);
 
   const handlePlay = () => {
@@ -73,7 +91,7 @@ export default function MovieDetailPage() {
       return;
     }
     // Save to continue watching
-    const continueWatching = JSON.parse(localStorage.getItem('ayuflix-continue') || '[]');
+    const continueWatching = readJSON('ayuflix-continue', []);
     const item = {
       id: movie.id,
       title: movie.title,
@@ -83,8 +101,10 @@ export default function MovieDetailPage() {
       lastWatched: new Date().toISOString(),
     };
     const filtered = continueWatching.filter((i) => i.id !== movie.id);
-    const updated = [item, ...filtered].slice(0, 20);
-    localStorage.setItem('ayuflix-continue', JSON.stringify(updated));
+    writeJSON('ayuflix-continue', [item, ...filtered].slice(0, 20));
+    // Streak + achievements
+    markWatchActivity();
+    evaluateAchievements();
     setPlaying(true);
     // Scroll player into view
     setTimeout(() => {
@@ -247,6 +267,15 @@ export default function MovieDetailPage() {
               >
                 <FaShareAlt size={16} /> Share
               </button>
+
+              <SaveToList
+                item={{
+                  id: movie.id,
+                  title: movie.title,
+                  posterPath: movie.poster_path,
+                  mediaType: 'movie',
+                }}
+              />
             </div>
           </div>
         </div>
@@ -266,6 +295,15 @@ export default function MovieDetailPage() {
             }}
           />
         )}
+
+        {/* Details / facts */}
+        <TitleFacts details={movie} type="movie" />
+
+        {/* Photo gallery */}
+        <PhotoGallery images={gallery} title={movie.title} />
+
+        {/* Comments */}
+        <CommentsSection mediaId={movie.id} title={movie.title} />
 
         {/* Recommended for you (TMDB recommendations) */}
         {recommended.length > 0 && (

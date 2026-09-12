@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { FaBullhorn, FaTimes } from 'react-icons/fa';
 import { fetchAdminConfig } from '@/lib/adminConfig';
 
@@ -28,6 +27,9 @@ export default function AnnouncementBanner() {
   }, []);
 
   if (!announcement?.enabled || !announcement.text || dismissed) return null;
+
+  // Optional expiry set in the admin panel (datetime-local)
+  if (announcement.expiresAt && new Date(announcement.expiresAt) < new Date()) return null;
 
   const inner = (
     <>

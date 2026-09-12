@@ -7,6 +7,7 @@ import MaintenanceGate from '@/components/MaintenanceGate';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
 import RouteFade from '@/components/RouteFade';
 import ScrollProgress from '@/components/ScrollProgress';
+import CommandPalette from '@/components/CommandPalette';
 import ToastHost from '@/lib/toast';
 
 export const metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({ children }) {
           <Footer />
           <ScrollToTop />
           <ShortcutsHelp />
+          <CommandPalette />
         </MaintenanceGate>
         <ToastHost />
       </body>

@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FaSearch, FaUser, FaHome, FaHistory, FaListUl } from 'react-icons/fa';
+import { FaSearch, FaUser, FaHome, FaHistory, FaListUl, FaChartBar, FaTrophy, FaCog } from 'react-icons/fa';
 import { useRandomMovie } from '@/lib/randomMovie';
+import { usePrefs } from '@/lib/userPrefs';
 import MobileMenu from './MobileMenu';
 import SearchSuggestions from './SearchSuggestions';
 import NotificationsMenu from './NotificationsMenu';
@@ -16,6 +17,7 @@ export default function Navbar() {
   const profileRef = useRef(null);
   const router = useRouter();
   const fetchRandomMovie = useRandomMovie();
+  const prefs = usePrefs();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -72,6 +74,9 @@ export default function Navbar() {
           <Link href="/my-list" className="text-white hover:text-red-500 hover:underline decoration-red-600 transition-colors text-sm font-medium">
             My List
           </Link>
+          <Link href="/achievements" className="text-white hover:text-red-500 hover:underline decoration-red-600 transition-colors text-sm font-medium">
+            🏆
+          </Link>
           <button
             onClick={fetchRandomMovie}
             className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-all hover:scale-105"
@@ -109,9 +114,15 @@ export default function Navbar() {
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen(!profileOpen)}
-              className="w-8 h-8 rounded-sm bg-red-600 ring-2 ring-red-600 flex items-center justify-center cursor-pointer hover:ring-red-500 transition-all"
+              className="w-8 h-8 rounded-sm bg-red-600 ring-2 ring-red-600 flex items-center justify-center cursor-pointer hover:ring-red-500 transition-all overflow-hidden"
+              title={prefs.avatar ? 'Your profile' : 'Profile'}
             >
-              <FaUser size={14} className="text-white" />
+              {prefs.avatar ? (
+                <span className="text-lg leading-none">{prefs.avatar}</span>
+              ) : (
+                <FaUser size={14} className="text-white" />
+              )
+              }
             </button>
 
             {profileOpen && (
@@ -139,6 +150,30 @@ export default function Navbar() {
                 >
                   <FaHistory size={16} className="text-red-500" />
                   <span>History</span>
+                </Link>
+                <Link
+                  href="/my-stats"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-white hover:bg-red-600/20 transition-colors border-t border-gray-800"
+                >
+                  <FaChartBar size={16} className="text-red-500" />
+                  <span>My Stats</span>
+                </Link>
+                <Link
+                  href="/achievements"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-white hover:bg-red-600/20 transition-colors border-t border-gray-800"
+                >
+                  <FaTrophy size={16} className="text-red-500" />
+                  <span>Achievements</span>
+                </Link>
+                <Link
+                  href="/settings"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-white hover:bg-red-600/20 transition-colors border-t border-gray-800"
+                >
+                  <FaCog size={16} className="text-red-500" />
+                  <span>Settings</span>
                 </Link>
               </div>
             )}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readConfig, writeConfig, verifyPassword } from '@/lib/adminStore';
+import { readConfig, writeConfig, verifyPassword, DEFAULT_CONFIG } from '@/lib/adminStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,21 +12,29 @@ export async function GET() {
 }
 
 // Admin only: saving requires the admin password via the x-admin-password header.
-// The payload is normalized so a bad client can't corrupt the shared config.
+// Body: { config: {...} } to save, or { action: 'reset' } to restore defaults.
 export async function POST(request) {
-  let password = request.headers.get('x-admin-password') || '';
-  let body = null;
+  const password = request.headers.get('x-admin-password');
+  if (typeof password !== 'string' || !verifyPassword(password)) {
+    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
+  }
+
+  let body = {};
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  if (!password && body?.password) {
-    password = body.password;
+
+  if (body.action === 'reset') {
+    const fresh = await writeConfig({ ...DEFAULT_CONFIG });
+    return NextResponse.json({ ok: true, config: fresh });
   }
-  if (!verifyPassword(password)) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
+
+  if (!body.config || typeof body.config !== 'object') {
+    return NextResponse.json({ error: 'Missing config object' }, { status: 400 });
   }
-  const saved = await writeConfig(body.config || {});
+
+  const saved = await writeConfig(body.config);
   return NextResponse.json({ ok: true, config: saved });
 }

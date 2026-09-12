@@ -13,21 +13,31 @@ export default function Footer() {
             <li><a href="/" className="hover:text-red-500 transition-colors">Home</a></li>
             <li><a href="/browse/tv" className="hover:text-red-500 transition-colors">TV Shows</a></li>
             <li><a href="/browse/movie" className="hover:text-red-500 transition-colors">Movies</a></li>
+            <li><a href="/genre/movie" className="hover:text-red-500 transition-colors">Genres</a></li>
+            <li><a href="/calendar" className="hover:text-red-500 transition-colors">TV Calendar</a></li>
+            <li><a href="/movie-night" className="hover:text-red-500 transition-colors">Movie Night</a></li>
           </ul>
         </div>
         <div>
           <p className="text-white font-semibold mb-3">You</p>
           <ul className="space-y-2 text-gray-500">
             <li><a href="/my-list" className="hover:text-red-500 transition-colors">My List</a></li>
+            <li><a href="/my-lists" className="hover:text-red-500 transition-colors">Custom Lists</a></li>
             <li><a href="/history" className="hover:text-red-500 transition-colors">Watch History</a></li>
             <li><a href="/my-stats" className="hover:text-red-500 transition-colors">My Stats</a></li>
+            <li><a href="/achievements" className="hover:text-red-500 transition-colors">Achievements</a></li>
+            <li><a href="/settings" className="hover:text-red-500 transition-colors">Settings</a></li>
             <li><a href="/admin" className="hover:text-red-500 transition-colors">Admin</a></li>
           </ul>
         </div>
         <div>
           <p className="text-white font-semibold mb-3">About</p>
-          <p className="text-gray-500">
-            AYUFLIX does not host any videos. All content is served by third-party providers. Metadata by{' '}
+          <ul className="space-y-2 text-gray-500">
+            <li><a href="/about" className="hover:text-red-500 transition-colors">About AYUFLIX</a></li>
+            <li><a href="/legal" className="hover:text-red-500 transition-colors">Terms &amp; Privacy</a></li>
+          </ul>
+          <p className="text-gray-600 text-xs mt-3">
+            AYUFLIX does not host any videos. Metadata by{' '}
             <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer" className="hover:text-red-500 transition-colors">TMDB</a>.
           </p>
         </div>

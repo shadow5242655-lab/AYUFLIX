@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   FaLock, FaSignOutAlt, FaServer, FaFilm, FaChartBar, FaToggleOn, FaToggleOff,
   FaPlus, FaTrash, FaSave, FaBullhorn, FaTools, FaArrowUp, FaArrowDown, FaCheckCircle, FaEye,
+  FaDownload, FaUpload, FaUndo,
 } from 'react-icons/fa';
 import { toast } from '@/lib/toast';
 import {
@@ -147,6 +148,59 @@ export default function AdminPage() {
   // ---- announcement helpers ----
   const patchAnnouncement = (patch) => {
     setConfig((c) => ({ ...c, announcement: { ...c.announcement, ...patch } }));
+  };
+
+  // ---- config backup helpers ----
+  const exportConfig = () => {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ayuflix-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('📦 Config exported', 'success');
+  };
+
+  const importConfigFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const imported = JSON.parse(reader.result);
+        if (!imported || typeof imported !== 'object') throw new Error('bad');
+        setConfig(imported);
+        const hero = imported.heroMovies || [];
+        setHeroMovies([...hero, ...Array(Math.max(0, 5 - hero.length)).fill('')].slice(0, 5));
+        toast('Config loaded — press Save Changes to publish', 'info');
+      } catch {
+        toast('Invalid config file', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const resetConfig = async () => {
+    if (!confirm('Reset EVERYTHING back to defaults? Servers, hero, announcement and maintenance mode will be wiped for all visitors.')) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      if (!res.ok) throw new Error('Reset failed');
+      const data = await res.json();
+      setConfig(data.config);
+      setHeroMovies(['', '', '', '', '']);
+      toast('♻️ Config reset to defaults', 'success');
+    } catch (err) {
+      toast(err.message || 'Reset failed', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (checking) {
@@ -429,6 +483,15 @@ export default function AdminPage() {
               placeholder="Optional link (https://...)"
               className="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg text-sm focus:outline-none focus:border-red-600"
             />
+            <label className="block">
+              <span className="text-gray-400 text-xs">Auto-hide after (optional):</span>
+              <input
+                type="datetime-local"
+                value={config.announcement?.expiresAt ? String(config.announcement.expiresAt).slice(0, 16) : ''}
+                onChange={(e) => patchAnnouncement({ expiresAt: e.target.value || '' })}
+                className="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg text-sm focus:outline-none focus:border-red-600 mt-1"
+              />
+            </label>
           </div>
         </div>
 
@@ -469,6 +532,47 @@ export default function AdminPage() {
               <p className="text-gray-400 text-sm">Active Servers</p>
             </div>
           </div>
+        </div>
+
+        {/* Section: Config backup */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <FaDownload className="text-red-500" /> Config Backup
+          </h2>
+          <p className="text-gray-400 text-sm mb-4">
+            Download the whole site config as a file, restore it on another deployment, or reset everything to
+            defaults.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={exportConfig}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg transition-all"
+            >
+              <FaDownload size={12} /> Export config
+            </button>
+            <button
+              onClick={() => document.getElementById('admin-config-import')?.click()}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg transition-all"
+            >
+              <FaUpload size={12} /> Import config
+            </button>
+            <input
+              id="admin-config-import"
+              type="file"
+              accept="application/json"
+              onChange={importConfigFile}
+              className="hidden"
+            />
+            <button
+              onClick={resetConfig}
+              className="flex items-center gap-2 bg-transparent border border-red-900 hover:bg-red-950 text-red-500 text-sm px-4 py-2 rounded-lg transition-all"
+            >
+              <FaUndo size={12} /> Reset to defaults
+            </button>
+          </div>
+          {config.updatedAt && (
+            <p className="text-gray-600 text-xs mt-3">Last saved: {new Date(config.updatedAt).toLocaleString()}</p>
+          )}
         </div>
       </div>
     </div>

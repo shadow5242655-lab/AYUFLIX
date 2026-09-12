@@ -102,3 +102,53 @@ body {
 .animate-fade-in {
   animation: fade-in 0.35s ease-out;
 }
+
+/* Theater mode: dim the rest of the page while the player is pinned */
+body.theater-mode > div:not([data-theater-host]) {
+  filter: brightness(0.25);
+  transition: filter 0.3s ease;
+}
+
+/* Reduced motion: kill animations/transitions app-wide */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
+  scroll-behavior: auto !important;
+}
+
+/* Accent color hook — components can use var(--accent) */
+:root {
+  --accent: #e50914;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -400px 0;
+  }
+  to {
+    background-position: 400px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #111 25%, #1c1c1c 50%, #111 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
